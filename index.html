@@ -1,15 +1,17 @@
 {
-  "name": "The Vacuum V51: Detailed Extraction & Auto-Reply",
+  "name": "The CSV Vacuum V52: Inbox Data Sniper",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "vacuum-strike",
+        "path": "csv-vacuum-strike",
         "responseMode": "lastNode",
-        "options": {}
+        "options": {
+          "binaryData": true
+        }
       },
       "id": "webhook-trigger",
-      "name": "Webhook Strike",
+      "name": "Webhook CSV Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
@@ -19,29 +21,12 @@
     },
     {
       "parameters": {
-        "url": "https://graph.facebook.com/v21.0/148670205004124/conversations",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "fields",
-              "value": "messages{message,from,created_time}"
-            },
-            {
-              "name": "limit",
-              "value": "100"
-            },
-            {
-              "name": "access_token",
-              "value": "EAANrFu3KNSoBRL5..."
-            }
-          ]
-        }
+        "options": {}
       },
-      "id": "fb-fetch",
-      "name": "FB Infiltration",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "id": "csv-parser",
+      "name": "Spreadsheet File",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
       "position": [
         300,
         300
@@ -49,28 +34,15 @@
     },
     {
       "parameters": {
-        "fieldToSplitOut": "data",
-        "options": {}
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 🔪 THE CHOPPER V52: สกัดทองจากไฟล์ Inbox_Data (ภาษาไทย)\nconst row = $json;\nconst results = [];\n\n// 🚩 พิกัดคอลัมน์ Facebook Export\nconst customerName = row[\"ชื่อบัญชี\"] || \"ไม่ระบุชื่อ\";\nconst accountId = row[\"Account ID\"];\nconst messageText = row[\"ข้อความล่าสุด\"] || \"\";\nconst tags = row[\"แท็ก\"] || \"\";\n\n// 1. สกัดเบอร์โทร (เน้นความแม่น 10 หลัก)\nconst phoneMatch = messageText.match(/0\\d{1,2}-?\\d{3}-?\\d{3,4}/) || messageText.match(/\\d{10}/);\nlet phone = phoneMatch ? phoneMatch[0].replace(/-/g, '').replace(/\\s/g, '') : \"ไม่พบเบอร์\";\n\n// 2. สกัดยอด COD (ครีๆ)\nconst priceMatch = messageText.match(/(?:ยอด|COD|ราคา|จ่าย|ครี)\\s*[:=-]?\\s*([\\d,.]+)/i) || messageText.match(/([\\d,.]+)\\s*(บาท|฿)/);\nlet totalPrice = 0;\nif (priceMatch) totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));\n\n// 3. สกัดที่อยู่ชั้นลึก\nconst addrMatch = messageText.match(/(?:ที่อยู่|ส่งที่|จัดส่ง)\\s*[:=-]?\\s*([\\s\\S]+?)(?=\\n|📞|📦|🚬|$)/);\nlet address = addrMatch ? addrMatch[1].trim() : \"รอสกัดจากแชท\";\n\n// 🛡️ กรองทิ้งถ้าไม่มีเบอร์โทร (เพราะเราจะ Upsert ด้วยเบอร์)\nif (phone !== \"ไม่พบเบอร์\") {\n    results.push({\n        json: {\n            msg_id: accountId,\n            recipient_name: customerName,\n            phone_number: phone,\n            cod_amount: totalPrice,\n            address: address,\n            tags: tags,\n            status: (tags.includes(\"สั่งซื้อแล้ว\")) ? \"ORDERED\" : \"WAITING\"\n        }\n    });\n}\n\nreturn results;"
       },
-      "id": "split-data",
-      "name": "Split Chat Items",
-      "type": "n8n-nodes-base.itemLists",
-      "typeVersion": 3,
-      "position": [
-        500,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// 🔪 THE CHOPPER V51.2: สไนเปอร์สกัดทองคำขั้นสูงสุด\nconst results = [];\nconst item = $input.item.json;\n\n// 🛡️ ขุดข้อมูลชั้นลึก (Meta Infiltration)\nconst messageObj = item.messages?.data?.[0] || {};\nconst messageText = messageObj.message || \"\";\nconst fromObj = messageObj.from || {};\nconst psid = fromObj.id;\nconst msgId = messageObj.id;\n\n// 1. สกัดเบอร์โทร (ล้างขยะ +66, -, และช่องว่าง) ให้เหลือ 10 หลัก\nconst phoneMatch = messageText.match(/0\\d{1,2}-?\\d{3}-?\\d{3,4}/) || messageText.match(/\\d{10}/);\nlet phone = phoneMatch ? phoneMatch[0].replace(/-/g, '').replace(/\\s/g, '').replace(/^\\+66/, '0') : \"ไม่พบเบอร์\";\n\n// 2. สกัดยอด COD (รองรับคำว่า 'ครี', 'จ่าย', 'ยอด')\nconst priceMatch = messageText.match(/(?:ยอด|COD|ราคา|จ่าย|ครี)\\s*[:=-]?\\s*([\\d,.]+)/i) || messageText.match(/([\\d,.]+)\\s*(บาท|฿)/);\nlet totalPrice = 0;\nif (priceMatch) totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));\n\n// 3. สกัดที่อยู่ (มองหาคำนำหน้าและสกัดจนจบข้อความหรือพบอีโมจิ)\nconst addrMatch = messageText.match(/(?:ที่อยู่|ส่งที่|จัดส่ง)\\s*[:=-]?\\s*([\\s\\S]+?)(?=\\n|📞|📦|🚬|$)/);\nlet address = addrMatch ? addrMatch[1].trim() : \"รอแจ้งที่อยู่\";\n\n// 4. สกัดสินค้า (มองหาสิ่งที่ลูกค้าอยากได้)\nconst prodMatch = messageText.match(/(?:สินค้า|เอา|สั่ง|รายการ)\\s*[:=-]?\\s*([^\\n]+)/i);\nlet product = prodMatch ? prodMatch[1].trim() : \"รอตรวจสอบรายการ\";\n\n// 🛡️ กรองข้อความขยะ/แอดมินตอบกลับ เพื่อป้องกันระบบวนลูป\nif (messageText.includes(\"ขอบคุณ\") || messageText.includes(\"แจ้งเลข\") || messageText.length < 5) return [];\n\n// 💰 ลั่นไกเฉพาะแชทที่มีเบอร์โทรหรือยอดเงิน\nif (phone !== \"ไม่พบเบอร์\" || totalPrice > 0) {\n    results.push({\n        json: {\n            psid: psid,\n            msg_id: msgId,\n            recipient_name: fromObj.name || \"ลูกค้า VVIP\",\n            phone_number: phone,\n            cod_amount: totalPrice,\n            address: address,\n            product: product,\n            reply_text: `สกัดยอด ${totalPrice.toLocaleString()} บ. สำเร็จ! 🦁🔥 สิงโตสโตร์กำลังจัดกระสุนความสดให้เดี๋ยวนี้ครับ!`\n        }\n    });\n}\n\nreturn results;"
-      },
-      "id": "detailed-chopper",
-      "name": "Detailed Chopper V51",
+      "id": "csv-chopper",
+      "name": "CSV Chopper V52",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        700,
+        500,
         300
       ]
     },
@@ -79,36 +51,22 @@
         "operation": "upsert",
         "table": "tracking_master",
         "columns": [
+          "msg_id",
           "recipient_name",
           "cod_amount",
-          "tracking_number",
+          "address",
+          "status",
           "phone_number"
         ],
         "onConflict": "phone_number"
       },
-      "id": "supabase-storage",
-      "name": "Supabase Vault",
+      "id": "supabase-vault",
+      "name": "Supabase Golden Vault",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        900,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "resource": "message",
-        "action": "sendText",
-        "recipientId": "={{ $json.psid }}",
-        "text": "={{ $json.reply_text }}"
-      },
-      "id": "auto-reply",
-      "name": "Auto-Reply Sniper",
-      "type": "n8n-nodes-base.facebookMessenger",
-      "typeVersion": 1,
-      "position": [
-        900,
-        400
+        750,
+        300
       ]
     }
   ],
@@ -117,47 +75,29 @@
       "main": [
         [
           {
-            "node": "fb-fetch",
+            "node": "csv-parser",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fb-fetch": {
+    "csv-parser": {
       "main": [
         [
           {
-            "node": "split-data",
+            "node": "csv-chopper",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "split-data": {
+    "csv-chopper": {
       "main": [
         [
           {
-            "node": "detailed-chopper",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "detailed-chopper": {
-      "main": [
-        [
-          {
-            "node": "supabase-storage",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "auto-reply",
+            "node": "supabase-vault",
             "type": "main",
             "index": 0
           }
