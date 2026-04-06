@@ -1,109 +1,325 @@
-{
-  "name": "The CSV Vacuum V52.3: BB1 Sniper Real-time",
-  "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "csv-vacuum-strike",
-        "responseMode": "lastNode",
-        "options": {
-          "binaryData": true
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Command V9.0 | DARKSIDE SNIPER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;800&family=Inter:wght@900&display=swap');
+        
+        /* <!-- Chosen Palette: Darkside Red & Black Overdrive -->
+        <!-- Application Structure Plan: ออกแบบด้วย Information Architecture แบบ Command Center-Centric:
+             1. Intelligence Snapshot (KPIs): สรุปสถานะออเดอร์และแชทค้างเพื่อการตัดสินใจด่วน
+             2. Tactical Ingest (The Chopper): พื้นที่ลั่นไกดูดไฟล์ CSV และส่งสัญญาณหา n8n
+             3. War Room Analytics: วิเคราะห์พฤติกรรมลูกค้าและสัดส่วน Tag ผ่าน Chart.js (Canvas)
+             4. Live Sniper Feed: รายการออเดอร์แบบ Real-time ที่มุดมาจาก Supabase
+             โครงสร้างนี้ถูกเลือกเพื่อให้บอส 'คุมเกม' และ 'สั่งลุย' ได้ในหน้าจอเดียวโดยไม่ต้องสลับ Tab -->
+        <!-- Visualization & Content Choices: 
+             1. Main Metrics -> Goal: Inform -> Highlight Cards -> Justification: สรุปความมั่งคั่งใน 3 วินาที
+             2. Tag Distribution -> Goal: Compare -> Doughnut Chart -> Justification: แยกเกรดลูกค้า 'สั่งซื้อแล้ว' vs 'ทักค้าง'
+             3. Ingest Status -> Goal: Action -> Dynamic Stepper -> Justification: แสดงความคืบหน้าการส่งข้อมูลไป n8n
+             4. Real-time Feed -> Goal: Monitor -> Auto-scrolling List -> Justification: ให้แอดมินเห็นออเดอร์เด้งรายวินาที
+             Confirming NO SVG/Mermaid used. -->
+        <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+        */
+
+        :root { --ds-red: #dc2626; --ds-black: #050505; --ds-gray: #1c1917; }
+        body { background-color: var(--ds-black); color: #f5f5f4; font-family: 'Anuphan', sans-serif; overflow-x: hidden; }
+        .header-font { font-family: 'Inter', sans-serif; letter-spacing: -0.05em; }
+        .glass-panel { background: rgba(15, 15, 15, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(220, 38, 38, 0.2); border-radius: 2.5rem; }
+        .chart-container { position: relative; width: 100%; max-width: 500px; margin: auto; height: 300px; max-height: 350px; }
+        
+        #drop-zone { border: 4px dashed rgba(220, 38, 38, 0.3); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        #drop-zone.dragover { border-color: var(--ds-red); background: rgba(220, 38, 38, 0.1); transform: scale(1.02); }
+        
+        .pulse-red { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .nav-btn { color: #78716c; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.3s; }
+        .nav-btn.active { color: var(--ds-red); background: rgba(220, 38, 38, 0.1); padding: 0.5rem 1.5rem; border-radius: 1rem; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--ds-red); border-radius: 10px; }
+    </style>
+</head>
+<body class="antialiased min-h-screen pb-10">
+
+    <!-- 🚩 TOP COMMAND NAV -->
+    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b border-red-900/30 px-8 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-5">
+                <div class="w-12 h-12 bg-red-950 border border-red-800 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(220,38,38,0.4)]">
+                    <span class="text-red-600 text-2xl pulse-red">⚓</span>
+                </div>
+                <div>
+                    <h1 class="header-font text-2xl font-black uppercase italic tracking-tighter text-white">DARKSIDE <span class="text-red-600">COMMAND</span></h1>
+                    <p class="text-[10px] font-bold text-red-700 uppercase tracking-[0.5em] leading-none mt-1">Sovereign DB V9.0 | Total War</p>
+                </div>
+            </div>
+            <div class="flex gap-8 items-center">
+                <button onclick="switchView('dashboard')" id="btn-dashboard" class="nav-btn active">Dashboard</button>
+                <button onclick="switchView('ingest')" id="btn-ingest" class="nav-btn">The Chopper</button>
+                <div class="flex items-center gap-2 bg-green-950/30 border border-green-900/50 px-4 py-1.5 rounded-full">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-ping"></span>
+                    <span class="text-[10px] font-black text-green-500 uppercase italic">Satellite Active</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 md:p-12 space-y-12">
+
+        <!-- 📊 SECTION 1: TACTICAL DASHBOARD -->
+        <section id="view-dashboard" class="space-y-12 animate-in fade-in duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="glass-panel p-8 bg-gradient-to-br from-black to-red-950/10">
+                    <p class="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-2">Total Contacts</p>
+                    <p id="stat-total" class="text-5xl font-black text-white italic">---</p>
+                </div>
+                <div class="glass-panel p-8 border-l-8 border-red-600">
+                    <p class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2">Unread Messages</p>
+                    <p id="stat-unread" class="text-5xl font-black text-white italic">---</p>
+                </div>
+                <div class="glass-panel p-8 border-l-8 border-purple-600">
+                    <p class="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-2">Success Rate</p>
+                    <p id="stat-success" class="text-5xl font-black text-white italic">--%</p>
+                </div>
+                <div class="glass-panel p-8 bg-stone-900 text-right">
+                    <p class="text-[10px] font-black text-stone-500 uppercase tracking-widest mb-2">Live Vault Sync</p>
+                    <p id="stat-vault" class="text-4xl font-black text-red-600 italic">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                <!-- Data Distribution Chart -->
+                <div class="lg:col-span-1 glass-panel p-10 flex flex-col items-center">
+                    <h3 class="text-xs font-black text-stone-500 uppercase tracking-[0.4em] mb-10 w-full text-left">Tag distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="tagChart"></canvas>
+                    </div>
+                    <p class="text-[11px] text-stone-600 mt-10 italic">ข้อมูลจาก 'BB1 - Inbox_Data'</p>
+                </div>
+
+                <!-- Live Sniper Monitor -->
+                <div class="lg:col-span-2 glass-panel p-10 space-y-8 overflow-hidden relative">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xl font-black uppercase italic tracking-widest text-white">Live Sniper Feed <span class="text-red-600">(Real-time)</span></h3>
+                        <button onclick="window.location.reload()" class="text-[9px] font-black uppercase text-stone-600 hover:text-white">Re-sync Vault</button>
+                    </div>
+                    <div id="order-list" class="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+                        <div class="col-span-full py-20 text-center opacity-10 flex flex-col items-center gap-4">
+                            <span class="text-5xl italic font-black">AWAITING STRIKE...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 📂 SECTION 2: THE CHOPPER (INGEST HUB) -->
+        <section id="view-ingest" class="hidden space-y-12 animate-in slide-in-from-bottom-5 duration-500">
+            <div class="text-center space-y-4">
+                <h2 class="header-font text-6xl font-black italic uppercase tracking-tighter text-white">THE <span class="text-red-600 underline decoration-red-950">CHOPPER</span> DROP</h2>
+                <p class="text-stone-400 text-lg italic max-w-2xl mx-auto">โยนไฟล์ 'BB1 - Inbox_Data.csv' ลงที่นี่เพื่อลั่นไกดูดออเดอร์เข้า SUPABASE ทันที!</p>
+            </div>
+
+            <div id="drop-zone" class="p-24 md:p-32 rounded-[5rem] text-center cursor-pointer group shadow-2xl relative overflow-hidden bg-gradient-to-b from-red-950/5 to-transparent">
+                <div class="absolute inset-0 bg-red-900/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div class="relative z-10 space-y-8">
+                    <span class="text-9xl block transition-transform group-hover:scale-110 duration-700 italic drop-shadow-[0_0_40px_rgba(220,38,38,0.2)]">📂</span>
+                    <h3 class="text-4xl font-black uppercase text-white tracking-[0.2em] italic">Drop CSV Payload</h3>
+                    <div class="flex justify-center gap-4 pt-4">
+                        <span class="px-5 py-2 bg-black/60 border border-red-900/40 rounded-full text-[10px] font-black text-red-500 uppercase tracking-widest">V52.3 Precision Engine</span>
+                    </div>
+                </div>
+                <input type="file" id="file-input" class="hidden" accept=".csv">
+            </div>
+
+            <!-- Ingest Progress Monitor -->
+            <div id="status-panel" class="hidden glass-panel p-10 rounded-[3.5rem] border-red-900/40 text-center animate-in fade-in slide-in-from-bottom-4">
+                <div class="flex flex-col items-center gap-6">
+                    <div class="w-16 h-16 border-4 border-red-950 border-t-red-600 rounded-full animate-spin"></div>
+                    <div class="space-y-2">
+                        <p id="status-text" class="text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse">Infiltrating...</p>
+                        <p class="text-[10px] text-stone-600 font-bold uppercase tracking-widest italic">Transferring Data to n8n Sniper Node</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Master Footer -->
+    <footer class="mt-20 border-t border-red-900/20 pt-16 pb-16 opacity-30 text-center text-[10px] font-black uppercase tracking-[0.8em] italic pointer-events-none">
+        Information Architect: Darkside Intelligence Hub © 2026
+    </footer>
+
+    <script>
+        // --- 🔴 STRATEGIC CONFIGURATION ---
+        const SUPABASE_URL = "https://nlgecesyjcrrqwiitlyt.supabase.co";
+        const SUPABASE_KEY = "sb_publishable_1agyo85-Uxq1VAllYjl1gg_M_utlMbw";
+        const WEBHOOK_URL = "https://draksidemaketing.app.n8n.cloud/webhook/csv-vacuum-strike";
+        
+        let sb = null;
+        let tagChart = null;
+
+        // 1. Initialize Supabase Connection
+        if (typeof window.supabase !== 'undefined') {
+            sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            initMonitor();
         }
-      },
-      "id": "webhook-trigger",
-      "name": "Webhook CSV Trigger",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        100,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "id": "csv-parser",
-      "name": "Spreadsheet File",
-      "type": "n8n-nodes-base.spreadsheetFile",
-      "typeVersion": 1,
-      "position": [
-        300,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "// 🔪 THE CHOPPER V52.3: สไนเปอร์สกัดทองจากไฟล์ BB1 - Inbox_Data.csv (Precision Edition)\nconst row = $json;\nconst results = [];\n\n// 🚩 แมตช์พิกัดคอลัมน์จากรูป image_a71565.jpg และไฟล์ CSV จริง\nconst customerName = row[\"ชื่อบัญชี\"] || \"ไม่ระบุชื่อ\";\nconst accountId = row[\"Account ID\"];\nconst messageText = row[\"ข้อความล่าสุด\"] || \"\";\nconst tags = row[\"แท็ก\"] || \"\";\nconst unreadCount = parseInt(row[\"จำนวนข้อความที่ยังไม่ได้อ่าน\"]) || 0;\n\n// 1. สกัดเบอร์โทร (คลีนขยะ +66, -, และช่องว่าง) ให้เหลือ 10 หลัก\nconst phoneMatch = messageText.match(/0\\d{1,2}-?\\d{3}-?\\d{3,4}/) || messageText.match(/\\d{10}/);\nlet phone = phoneMatch ? phoneMatch[0].replace(/-/g, '').replace(/\\s/g, '').replace(/^\\+66/, '0') : \"ไม่พบเบอร์\";\n\n// 2. สกัดยอด COD (รองรับคำว่า 'ครี', 'จ่าย', 'ยอด', 'บาท')\nconst priceMatch = messageText.match(/(?:ยอด|COD|ราคา|จ่าย|ครี)\\s*[:=-]?\\s*([\\d,.]+)/i) || messageText.match(/([\\d,.]+)\\s*(บาท|฿)/);\nlet totalPrice = 0;\nif (priceMatch) totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));\n\n// 3. สกัดที่อยู่ (มองหาคำนำหน้าและสกัดจนจบข้อความหรือพบอีโมจิ)\nconst addrMatch = messageText.match(/(?:ที่อยู่|ส่งที่|จัดส่ง)\\s*[:=-]?\\s*([\\s\\S]+?)(?=\\n|📞|📦|🚬|$)/);\nlet address = addrMatch ? addrMatch[1].trim() : \"รอแจ้งที่อยู่\";\n\n// 4. สกัดสินค้า (มองหาสิ่งที่ลูกค้าอยากได้)\nconst prodMatch = messageText.match(/(?:สินค้า|เอา|สั่ง|รายการ)\\s*[:=-]?\\s*([^\\n]+)/i);\nlet product = prodMatch ? prodMatch[1].trim() : \"รอตรวจสอบรายการ\";\n\n// 🛡️ จิตวิทยา: สแกน Tag 'สั่งซื้อแล้ว' เพื่อระบุสถานะ\nlet status = \"PENDING\";\nif (tags.includes(\"สั่งซื้อแล้ว\")) status = \"ORDERED\";\n\n// 💰 ลั่นไกเฉพาะแชทที่มีเบอร์โทรหรือยอดเงิน\nif (phone !== \"ไม่พบเบอร์\" || totalPrice > 0) {\n    results.push({\n        json: {\n            msg_id: accountId,               // ใช้ Account ID เป็นไอดีหลัก\n            recipient_name: customerName,\n            phone_number: phone,\n            cod_amount: totalPrice,\n            address: address,\n            product: product,\n            status: status,\n            unread_count: unreadCount\n        }\n    });\n}\n\nreturn results;"
-      },
-      "id": "csv-chopper",
-      "name": "CSV Chopper V52.3",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        500,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "upsert",
-        "table": "tracking_master",
-        "columns": [
-          "msg_id",
-          "recipient_name",
-          "cod_amount",
-          "address",
-          "phone_number",
-          "status",
-          "product"
-        ],
-        "onConflict": "phone_number"
-      },
-      "id": "supabase-vault",
-      "name": "Supabase Golden Vault",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        750,
-        300
-      ]
-    }
-  ],
-  "connections": {
-    "webhook-trigger": {
-      "main": [
-        [
-          {
-            "node": "csv-parser",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "csv-parser": {
-      "main": [
-        [
-          {
-            "node": "csv-chopper",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "csv-chopper": {
-      "main": [
-        [
-          {
-            "node": "supabase-vault",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  }
-}
+
+        // 2. Navigation Logic
+        function switchView(viewId) {
+            document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+            document.getElementById('btn-' + viewId).classList.add('active');
+        }
+
+        // 3. File Processing & Ingest
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const statusPanel = document.getElementById('status-panel');
+        const statusText = document.getElementById('status-text');
+
+        dropZone.onclick = () => fileInput.click();
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        async function handleFile(file) {
+            if (!file) return;
+            statusPanel.classList.remove('hidden');
+            
+            // Step 1: Pre-Analytics (Local Analysis)
+            const reader = new FileReader();
+            reader.onload = (e) => analyzeCSV(e.target.result);
+            reader.readAsText(file);
+
+            // Step 2: Trigger n8n Sniper
+            const formData = new FormData();
+            formData.append('data', file);
+            try {
+                const response = await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
+                if (response.ok) {
+                    statusText.innerText = "SUCCESS! ✌️🔴🔥";
+                    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
+                    setTimeout(() => {
+                        statusPanel.classList.add('hidden');
+                        switchView('dashboard');
+                    }, 2000);
+                }
+            } catch (err) {
+                statusText.innerText = "N8N OFFLINE! 🚨";
+                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
+            }
+        }
+
+        // 4. Local Analysis Logic
+        function analyzeCSV(text) {
+            const lines = text.split('\n');
+            const headers = lines[0].split(',');
+            const rows = lines.slice(1).filter(l => l.trim() !== '').map(line => {
+                const values = line.split(',');
+                let obj = {};
+                headers.forEach((h, i) => obj[h.trim()] = values[i] ? values[i].trim() : "");
+                return obj;
+            });
+
+            // Calculate KPIs
+            const total = rows.length;
+            const unread = rows.reduce((acc, curr) => acc + (parseInt(curr["จำนวนข้อความที่ยังไม่ได้อ่าน"]) || 0), 0);
+            const ordered = rows.filter(r => r["แท็ก"] && r["แท็ก"].includes("สั่งซื้อแล้ว")).length;
+            const successRate = ((ordered / total) * 100).toFixed(1);
+
+            document.getElementById('stat-total').innerText = total.toLocaleString();
+            document.getElementById('stat-unread').innerText = unread.toLocaleString();
+            document.getElementById('stat-success').innerText = successRate + "%";
+
+            updateChart(ordered, total - ordered);
+        }
+
+        // 5. Chart Control
+        function updateChart(ordered, potential) {
+            const ctx = document.getElementById('tagChart').getContext('2d');
+            if (tagChart) tagChart.destroy();
+            tagChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Success (Ordered)', 'Potential'],
+                    datasets: [{
+                        data: [ordered, potential],
+                        backgroundColor: ['#dc2626', '#1c1917'],
+                        borderWidth: 0,
+                        hoverOffset: 25
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '80%',
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // 6. Real-time Monitoring Logic
+        async function initMonitor() {
+            if (!sb) return;
+
+            // Fetch Count
+            const { count } = await sb.from('tracking_master').select('*', { count: 'exact', head: true });
+            document.getElementById('stat-vault').innerText = count || 0;
+
+            // Fetch Latest Entries
+            const { data } = await sb.from('tracking_master').select('*').order('created_at', { ascending: false }).limit(10);
+            if (data) {
+                const list = document.getElementById('order-list');
+                list.innerHTML = '';
+                data.forEach(order => renderOrderCard(order));
+            }
+
+            // Real-time Subscribe
+            sb.channel('public:tracking_master')
+              .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tracking_master' }, payload => {
+                  renderOrderCard(payload.new, true);
+                  const currentCount = parseInt(document.getElementById('stat-vault').innerText);
+                  document.getElementById('stat-vault').innerText = currentCount + 1;
+              })
+              .subscribe();
+        }
+
+        function renderOrderCard(order, isNew = false) {
+            const list = document.getElementById('order-list');
+            if (list.innerHTML.includes('AWAITING')) list.innerHTML = '';
+
+            const card = document.createElement('div');
+            card.className = `glass-panel p-6 border-red-900/10 hover:border-red-600 transition-all ${isNew ? 'animate-in slide-in-from-right-4 duration-500' : ''}`;
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <span class="text-[9px] font-black bg-red-950 text-red-600 px-3 py-1 rounded-full border border-red-900 uppercase">HIT</span>
+                    <span class="text-[9px] text-stone-700 font-mono">${new Date(order.created_at).toLocaleTimeString()}</span>
+                </div>
+                <h4 class="text-lg font-black text-white italic truncate uppercase mb-1">${order.recipient_name || 'VVIP Client'}</h4>
+                <p class="text-xs font-mono text-stone-600 mb-4">${order.phone_number}</p>
+                <div class="flex justify-between items-center border-t border-red-900/10 pt-4">
+                    <span class="text-[8px] font-black text-stone-500 uppercase">COD Value</span>
+                    <span class="text-xl font-black text-white italic">${Number(order.cod_amount).toLocaleString()} ฿</span>
+                </div>
+            `;
+            list.prepend(card);
+            if (list.children.length > 20) list.lastElementChild.remove();
+        }
+    </script>
+</body>
+</html>
