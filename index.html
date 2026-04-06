@@ -1,5 +1,5 @@
 {
-  "name": "The CSV Vacuum V52.2: BB1 Sniper Real-time",
+  "name": "The CSV Vacuum V52.3: BB1 Sniper Real-time",
   "nodes": [
     {
       "parameters": {
@@ -35,10 +35,10 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// 🔪 THE CHOPPER V52.2: สไนเปอร์สกัดทองจากไฟล์ BB1 - Inbox_Data.csv\nconst row = $json;\nconst results = [];\n\nconst customerName = row[\"ชื่อบัญชี\"] || \"ไม่ระบุชื่อ\";\nconst accountId = row[\"Account ID\"];\nconst messageText = row[\"ข้อความล่าสุด\"] || \"\";\nconst tags = row[\"แท็ก\"] || \"\";\n\nconst phoneMatch = messageText.match(/0\\d{1,2}-?\\d{3}-?\\d{3,4}/) || messageText.match(/\\d{10}/);\nlet phone = phoneMatch ? phoneMatch[0].replace(/-/g, '').replace(/\\s/g, '') : \"ไม่พบเบอร์\";\n\nconst priceMatch = messageText.match(/(?:ยอด|COD|ราคา|จ่าย|ครี)\\s*[:=-]?\\s*([\\d,.]+)/i) || messageText.match(/([\\d,.]+)\\s*(บาท|฿)/);\nlet totalPrice = 0;\nif (priceMatch) totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));\n\nconst addrMatch = messageText.match(/(?:ที่อยู่|ส่งที่|จัดส่ง)\\s*[:=-]?\\s*([\\s\\S]+?)(?=\\n|📞|📦|🚬|$)/);\nlet address = addrMatch ? addrMatch[1].trim() : \"รอสกัดจากแชท\";\n\nlet status = \"PENDING\";\nif (tags.includes(\"สั่งซื้อแล้ว\")) status = \"ORDERED\";\n\nif (phone !== \"ไม่พบเบอร์\") {\n    results.push({\n        json: {\n            msg_id: accountId,\n            recipient_name: customerName,\n            phone_number: phone,\n            cod_amount: totalPrice,\n            address: address,\n            status: status\n        }\n    });\n}\n\nreturn results;"
+        "jsCode": "// 🔪 THE CHOPPER V52.3: สไนเปอร์สกัดทองจากไฟล์ BB1 - Inbox_Data.csv (Precision Edition)\nconst row = $json;\nconst results = [];\n\n// 🚩 แมตช์พิกัดคอลัมน์จากรูป image_a71565.jpg และไฟล์ CSV จริง\nconst customerName = row[\"ชื่อบัญชี\"] || \"ไม่ระบุชื่อ\";\nconst accountId = row[\"Account ID\"];\nconst messageText = row[\"ข้อความล่าสุด\"] || \"\";\nconst tags = row[\"แท็ก\"] || \"\";\nconst unreadCount = parseInt(row[\"จำนวนข้อความที่ยังไม่ได้อ่าน\"]) || 0;\n\n// 1. สกัดเบอร์โทร (คลีนขยะ +66, -, และช่องว่าง) ให้เหลือ 10 หลัก\nconst phoneMatch = messageText.match(/0\\d{1,2}-?\\d{3}-?\\d{3,4}/) || messageText.match(/\\d{10}/);\nlet phone = phoneMatch ? phoneMatch[0].replace(/-/g, '').replace(/\\s/g, '').replace(/^\\+66/, '0') : \"ไม่พบเบอร์\";\n\n// 2. สกัดยอด COD (รองรับคำว่า 'ครี', 'จ่าย', 'ยอด', 'บาท')\nconst priceMatch = messageText.match(/(?:ยอด|COD|ราคา|จ่าย|ครี)\\s*[:=-]?\\s*([\\d,.]+)/i) || messageText.match(/([\\d,.]+)\\s*(บาท|฿)/);\nlet totalPrice = 0;\nif (priceMatch) totalPrice = parseFloat(priceMatch[1].replace(/,/g, ''));\n\n// 3. สกัดที่อยู่ (มองหาคำนำหน้าและสกัดจนจบข้อความหรือพบอีโมจิ)\nconst addrMatch = messageText.match(/(?:ที่อยู่|ส่งที่|จัดส่ง)\\s*[:=-]?\\s*([\\s\\S]+?)(?=\\n|📞|📦|🚬|$)/);\nlet address = addrMatch ? addrMatch[1].trim() : \"รอแจ้งที่อยู่\";\n\n// 4. สกัดสินค้า (มองหาสิ่งที่ลูกค้าอยากได้)\nconst prodMatch = messageText.match(/(?:สินค้า|เอา|สั่ง|รายการ)\\s*[:=-]?\\s*([^\\n]+)/i);\nlet product = prodMatch ? prodMatch[1].trim() : \"รอตรวจสอบรายการ\";\n\n// 🛡️ จิตวิทยา: สแกน Tag 'สั่งซื้อแล้ว' เพื่อระบุสถานะ\nlet status = \"PENDING\";\nif (tags.includes(\"สั่งซื้อแล้ว\")) status = \"ORDERED\";\n\n// 💰 ลั่นไกเฉพาะแชทที่มีเบอร์โทรหรือยอดเงิน\nif (phone !== \"ไม่พบเบอร์\" || totalPrice > 0) {\n    results.push({\n        json: {\n            msg_id: accountId,               // ใช้ Account ID เป็นไอดีหลัก\n            recipient_name: customerName,\n            phone_number: phone,\n            cod_amount: totalPrice,\n            address: address,\n            product: product,\n            status: status,\n            unread_count: unreadCount\n        }\n    });\n}\n\nreturn results;"
       },
       "id": "csv-chopper",
-      "name": "CSV Chopper V52.2",
+      "name": "CSV Chopper V52.3",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -56,7 +56,8 @@
           "cod_amount",
           "address",
           "phone_number",
-          "status"
+          "status",
+          "product"
         ],
         "onConflict": "phone_number"
       },
@@ -71,8 +72,38 @@
     }
   ],
   "connections": {
-    "webhook-trigger": { "main": [ [ { "node": "csv-parser", "type": "main", "index": 0 } ] ] },
-    "csv-parser": { "main": [ [ { "node": "csv-chopper", "type": "main", "index": 0 } ] ] },
-    "csv-chopper": { "main": [ [ { "node": "supabase-vault", "type": "main", "index": 0 } ] ] }
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "csv-parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "csv-parser": {
+      "main": [
+        [
+          {
+            "node": "csv-chopper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "csv-chopper": {
+      "main": [
+        [
+          {
+            "node": "supabase-vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
