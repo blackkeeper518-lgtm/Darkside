@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darkside Analytics Hub | 1000 Houses Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;600;800&family=Inter:wght@900&display=swap');
+        
+        /* <!-- Chosen Palette: Warm Sand & Tactical Crimson -->
+        <!-- Application Structure Plan: 
+             ออกแบบด้วยระบบ Information Architecture แบบ Dashboard-Oriented 
+             เน้นการแยกส่วนข้อมูลเป็น 3 เลเยอร์:
+             1. Tactical Intelligence (KPI Snapshot): สรุปชัยชนะรายวัน
+             2. Strategic War Room (Deep Analytics): วิเคราะห์แนวโน้มผ่าน Chart.js (Canvas)
+             3. Operational Support (Interactive Maintenance): หน่วยซ่อมบำรุงระบบ n8n/Supabase 
+             โครงสร้างนี้ถูกเลือกเพื่อให้บอส 'คุมเกม' ได้เบ็ดเสร็จในหน้าจอเดียว ลด Cognitive Load โดยใช้พื้นหลังสีสว่างที่สะอาดตา -->
+        <!-- Visualization & Content Choices: 
+             1. Main Stats Card -> Goal: Inform -> Highlight Summary -> Justification: สรุปความมั่งคั่งใน 3 วินาที
+             2. Daily Performance -> Goal: Change -> Line Chart -> Justification: ดูความเสถียรของท่อ Vacuum
+             3. Channel Share -> Goal: Compare -> Doughnut Chart -> Justification: แยกสัดส่วนยอด BB และสิงโต
+             4. Troubleshooting Guide -> Goal: Organize -> Interactive Toggles -> Justification: สยบ Error #10 ทันที
+             Confirming NO SVG/Mermaid used. -->
+        <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+        */
+
+        body { 
+            background-color: #fafaf9; /* Stone 50: นวลตา สบายใจสำหรับจอมทัพ */
+            color: #1c1917; /* Stone 900 */
+            font-family: 'Anuphan', sans-serif; 
+            overflow-x: hidden;
+        }
+        .header-font { font-family: 'Inter', sans-serif; letter-spacing: -0.05em; }
+        
+        /* Chart Container Management */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+
+        .glass-card { 
+            background: #ffffff; 
+            border: 1px solid #e7e5e4; 
+            border-radius: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .glass-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab-btn {
+            position: relative;
+            color: #a8a29e;
+            font-weight: 800;
+            padding: 1rem 2rem;
+            border-radius: 1.25rem;
+            transition: all 0.3s;
+        }
+        .tab-btn.active {
+            color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: slideIn 0.5s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+        .btn-strike {
+            background: #dc2626;
+            color: white;
+            padding: 1rem 3.5rem;
+            border-radius: 100px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            box-shadow: 0 10px 25px rgba(220, 38, 38, 0.3);
+            transition: all 0.3s;
+        }
+        .btn-strike:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+        }
+
+        .trouble-card {
+            border-left: 10px solid #e7e5e4;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .trouble-card.active {
+            border-left-color: #dc2626;
+            background: #fef2f2;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen pb-20">
+
+    <!-- 🚩 TOP NAVIGATION -->
+    <header class="bg-white/90 backdrop-blur-xl sticky top-0 z-[100] border-b border-stone-200">
+        <div class="max-w-7xl mx-auto px-8 py-5 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-5">
+                <div class="w-14 h-14 bg-red-600 rounded-[1.5rem] flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-red-100 animate-pulse">
+                    ⚓
+                </div>
+                <div>
+                    <h1 class="header-font text-3xl font-black uppercase italic text-stone-900 leading-none">
+                        DARKSIDE <span class="text-red-600">ANALYTICS</span>
+                    </h1>
+                    <p class="text-[10px] font-black text-stone-400 uppercase tracking-[0.5em] mt-1 italic">Vercel Ready Index V36.8</p>
+                </div>
+            </div>
+            
+            <nav class="flex gap-2 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
+                <button onclick="switchTab('intel')" id="btn-intel" class="tab-btn active text-[10px] uppercase tracking-widest">Intelligence</button>
+                <button onclick="switchTab('war-room')" id="btn-war-room" class="tab-btn text-[10px] uppercase tracking-widest">War Room</button>
+                <button onclick="switchTab('maint')" id="btn-maint" class="tab-btn text-[10px] uppercase tracking-widest">Maintenance</button>
+            </nav>
+
+            <div class="flex items-center gap-4 bg-white border border-stone-200 px-6 py-2.5 rounded-full shadow-sm">
+                <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
+                <span class="text-[11px] font-black text-stone-600 uppercase tracking-tighter italic">Sniper Node Online</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-8 py-14">
+
+        <!-- ========================================== -->
+        <!-- SECTION 1: INTELLIGENCE (OVERVIEW) -->
+        <!-- ========================================== -->
+        <section id="intel" class="tab-content active space-y-14">
+            <div class="bg-white p-10 rounded-[3rem] border border-stone-200 shadow-sm relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 text-[12rem] font-black text-stone-50 opacity-5 italic pointer-events-none">MISSION</div>
+                <h2 class="text-5xl font-black text-stone-900 uppercase italic tracking-tighter leading-tight mb-4">THE <span class="text-red-600">1000 HOUSES</span> REPORT.</h2>
+                <p class="text-stone-500 text-lg leading-relaxed max-w-2xl italic">
+                    รายงานฉบับนี้สรุปความคืบหน้าของอาณาจักรบีบีและสิงโตในรอบ 24 ชั่วโมงล่าสุด โดยวิเคราะห์ประสิทธิภาพจากระบบสกัดทองคำ (The Vacuum) และตัวเลขยอดขายสะสม เพื่อประกอบการตัดสินใจยิงแอดในสมรภูมิถัดไปครับ!
+                </p>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="glass-card p-10 border-l-[15px] border-purple-600">
+                    <p class="text-[11px] font-black text-stone-400 uppercase tracking-[0.3em] mb-3">BB Store 💜</p>
+                    <p class="text-6xl font-black text-stone-900 italic">215 <span class="text-xl font-normal text-stone-400">บ้าน</span></p>
+                    <p class="text-[10px] text-green-600 font-bold mt-4 uppercase tracking-widest">▲ +14% Growth Today</p>
+                </div>
+                <div class="glass-card p-10 border-l-[15px] border-orange-500">
+                    <p class="text-[11px] font-black text-stone-400 uppercase tracking-[0.3em] mb-3">Singto Store 🦁</p>
+                    <p class="text-6xl font-black text-stone-900 italic">197 <span class="text-xl font-normal text-stone-400">บ้าน</span></p>
+                    <p class="text-[10px] text-stone-400 font-bold mt-4 uppercase tracking-widest">● Stable Performance</p>
+                </div>
+                <div class="glass-card p-10 bg-stone-900 text-white border-l-[15px] border-red-600">
+                    <p class="text-[11px] font-black text-stone-500 uppercase tracking-[0.3em] mb-3">Total Value Captured</p>
+                    <p class="text-5xl font-black text-red-500 italic">385.4K</p>
+                    <p class="text-[11px] font-bold text-stone-400 mt-4 uppercase font-mono tracking-tighter">THB VAULTED IN SUPABASE</p>
+                </div>
+            </div>
+
+            <div class="p-8 bg-amber-50 border border-amber-200 rounded-[2.5rem] flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
+                <span class="text-5xl">💡</span>
+                <p class="text-stone-800 text-sm leading-relaxed italic font-medium">
+                    <strong class="text-amber-900">จิตวิทยาจอมทัพ:</strong> อัตราการดูดออเดอร์ของ <strong>The Vacuum</strong> ในสิงโตสโตร์เพิ่มขึ้นอย่างมีนัยสำคัญในช่วง 16:00 น. บอสควรพิจารณาอัดงบแอดในช่วงเวลานี้เพื่อกระแทกยอดสู่เป้าหมาย 1,000 บ้านครับ!
+                </p>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 2: WAR ROOM (ANALYTICS) -->
+        <!-- ========================================== -->
+        <section id="war-room" class="tab-content space-y-12">
+            <div class="bg-stone-900 p-10 rounded-[3rem] text-white space-y-2">
+                <h2 class="text-4xl font-black uppercase italic tracking-tight">War Room <span class="text-red-600">Performance</span></h2>
+                <p class="text-stone-500 text-sm italic">เปรียบเทียบประสิทธิผลของเครื่องจักรดูดดาต้าและความมั่งคั่งของแต่ละช่องทาง</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <!-- Bar Chart -->
+                <div class="glass-card p-10 flex flex-col">
+                    <h3 class="text-xs font-black text-stone-400 uppercase tracking-[0.4em] mb-10">Daily Ingest Efficiency</h3>
+                    <div class="chart-container flex-1">
+                        <canvas id="volumeChart"></canvas>
+                    </div>
+                    <p class="text-[11px] text-stone-400 mt-10 italic text-center">
+                        *แกนแดง: ออเดอร์ที่ API สกัดได้โดยไม่ต้องเปิดแชท / แกนเทา: ออเดอร์จากการอัปโหลดไฟล์ Excel
+                    </p>
+                </div>
+
+                <!-- Doughnut Chart -->
+                <div class="glass-card p-10 flex flex-col items-center">
+                    <h3 class="text-xs font-black text-stone-400 uppercase tracking-[0.4em] mb-10 w-full text-left">Revenue Split (By Store)</h3>
+                    <div class="chart-container flex-1 flex items-center justify-center">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                    <div class="mt-10 grid grid-cols-2 gap-10 w-full">
+                        <div class="text-center p-6 bg-purple-50 rounded-[2rem]">
+                            <p class="text-[9px] font-black text-purple-400 uppercase mb-1">BB Store Portfolio</p>
+                            <p class="text-3xl font-black text-purple-700 italic">52% Share</p>
+                        </div>
+                        <div class="text-center p-6 bg-orange-50 rounded-[2rem]">
+                            <p class="text-[9px] font-black text-orange-400 uppercase mb-1">Singto Mastery</p>
+                            <p class="text-3xl font-black text-orange-700 italic">48% Share</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- SECTION 3: MAINTENANCE (DIAGNOSTICS) -->
+        <!-- ========================================== -->
+        <section id="maint" class="tab-content space-y-12">
+            <div class="max-w-2xl space-y-4">
+                <h2 class="text-5xl font-black text-stone-900 uppercase italic">Technical <span class="text-red-600">Protocols</span></h2>
+                <p class="text-stone-500 text-sm leading-relaxed italic">
+                    จอมทัพต้องซ่อมปืนได้ด้วยตัวเอง! รวบรวมทางแก้ปัญหา "ตัวแดง" ใน n8n และวิธีทำให้แอป Vercel แสดงผลได้ 100% ครับบอส!
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
+                <div class="space-y-6">
+                    <div onclick="showFix('fixVercel')" id="btn-fixVercel" class="trouble-card active glass-card p-10 group">
+                        <h4 class="text-xl font-black uppercase text-red-600 mb-2">Vercel 404 Fix</h4>
+                        <p class="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">วิธีแก้หน้า NOT FOUND</p>
+                    </div>
+                    <div onclick="showFix('fix1')" id="btn-fix1" class="trouble-card glass-card p-10 group">
+                        <h4 class="text-lg font-black uppercase text-stone-900 mb-2 group-hover:tracking-widest transition-all">Error #10 Fix</h4>
+                        <p class="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">สยบกุญแจเพจผิดดอก</p>
+                    </div>
+                    <div onclick="showFix('fix2')" id="btn-fix2" class="trouble-card glass-card p-10 group">
+                        <h4 class="text-lg font-black uppercase text-amber-600 mb-2 group-hover:tracking-widest transition-all">DB Credential</h4>
+                        <p class="text-[10px] text-stone-500 font-bold uppercase tracking-widest leading-relaxed">เสียบปลั๊ก Supabase</p>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 glass-card p-12 bg-white min-h-[600px] relative overflow-hidden">
+                    <div class="absolute -top-10 -right-10 text-[12rem] font-black text-stone-50 opacity-[0.04] italic pointer-events-none">REPAIR</div>
+                    
+                    <div id="fixVercel-content" class="fix-detail active space-y-10">
+                        <div class="flex items-center gap-6">
+                            <span class="text-4xl">🌩️</span>
+                            <h3 class="text-3xl font-black text-stone-900 uppercase italic">กลยุทธ์แก้ 404 บน VERCEL</h3>
+                        </div>
+                        <div class="p-8 bg-red-50 border-l-[12px] border-red-600 rounded-r-[2.5rem] space-y-6">
+                            <p class="text-red-900 font-black text-xl italic uppercase tracking-tighter">"ชื่อไฟล์คือประตู ถ้าประตูไม่ตรง ชื่อก็เข้าไม่ได้"</p>
+                            <ul class="text-sm text-red-800 space-y-5 font-bold uppercase">
+                                <li>1. <span class="bg-red-200 px-2">สาเหตุ:</span> ระบบ Cloud จะมองหาไฟล์ที่ชื่อ <code class="bg-black text-white px-2 py-1 rounded">index.html</code> เป็นอย่างแรกครับ</li>
+                                <li>2. <span class="bg-red-200 px-2">วิธีแก้:</span> ในเครื่องบอส ให้เปลี่ยนชื่อไฟล์จาก <code class="bg-black text-white px-1">darkside_analytics_hub.html</code> เป็น <code class="bg-red-600 text-white px-2 py-1 rounded">index.html</code> เท่านั้นครับ!</li>
+                                <li>3. <span class="bg-red-200 px-2">ลั่นไกใหม่:</span> อัปโหลดไฟล์ที่เปลี่ยนชื่อแล้วเข้า GitHub อีกครั้ง... Vercel จะออนไลน์ทันทีครับ!</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="fix1-content" class="fix-detail hidden space-y-10">
+                        <div class="flex items-center gap-6">
+                            <span class="text-4xl">🚨</span>
+                            <h3 class="text-3xl font-black text-stone-900 uppercase italic">สยบกุญแจผิดดอก (Error #10)</h3>
+                        </div>
+                        <div class="p-8 bg-stone-100 border-l-[12px] border-stone-800 rounded-r-[2.5rem] space-y-6">
+                            <p class="text-red-900 font-black text-lg italic uppercase tracking-tighter">"หนึ่งเพจ หนึ่งกุญแจ เพื่ออำนาจที่ไร้ขีดจำกัด"</p>
+                            <ul class="text-sm text-stone-800 space-y-4 font-bold uppercase leading-relaxed">
+                                <li>1. เข้า FB Graph Explorer เปลี่ยนชื่อจาก User เป็น "ชื่อเพจโดยตรง"</li>
+                                <li>2. ตรวจสอบสิทธิ์ "pages_messaging" ต้องมีสีเขียว</li>
+                                <li>3. กด Generate Token ใหม่ และห้ามลืมกด Extend เป็น 60 วัน</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div id="fix2-content" class="fix-detail hidden space-y-10">
+                        <div class="flex items-center gap-6">
+                            <span class="text-4xl">🔌</span>
+                            <h3 class="text-3xl font-black text-stone-900 uppercase italic">เสียบปลั๊กคลังแสง (Supabase Setup)</h3>
+                        </div>
+                        <div class="p-8 bg-amber-50 border-l-[12px] border-amber-600 rounded-r-[2.5rem] space-y-6">
+                            <p class="text-amber-900 font-black text-lg italic uppercase tracking-tighter">"คลังที่ล็อกอยู่ คือดาต้าที่ไม่มีค่าเปลี่ยนเป็นเงิน"</p>
+                            <ul class="text-sm text-amber-800 space-y-4 font-bold uppercase leading-relaxed">
+                                <li>1. ใน n8n คลิก 'Create New Credential' ในโหนด Supabase</li>
+                                <li>2. ใส่ HOST: nlgecesyjcrrqwiitlyt.supabase.co</li>
+                                <li>3. ใส่ SERVICE ROLE KEY ที่ดาร์กไซค์เตรียมไว้ให้</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="mt-20 border-t border-stone-200 pt-16 pb-16 bg-white/50 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="text-center md:text-left">
+                <p class="text-[10px] font-black text-stone-400 uppercase tracking-[0.8em] italic">Information Architecture: Darkside Engine</p>
+                <p class="text-[10px] font-black text-red-600 uppercase tracking-[0.4em] mt-3">Strategic Excellence for 1,000 Houses © 2026</p>
+            </div>
+            <div class="flex gap-10">
+                <div class="text-center"><p class="text-[9px] font-black text-stone-400 uppercase mb-1">Cloud Status</p><p class="text-xs font-bold text-green-600">PRODUCTION ONLINE 🟢</p></div>
+                <div class="text-center"><p class="text-[9px] font-black text-stone-400 uppercase mb-1">Version</p><p class="text-xs font-bold text-stone-900 italic">V36.8 FULL SPA</p></div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- LOGIC SYSTEM -->
+    <script>
+        // --- 1. Navigation Logic ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.add('active');
+
+            if (tabId === 'war-room') setTimeout(initCharts, 100);
+        }
+
+        // --- 2. Maintenance Fix Explorer ---
+        function showFix(fixId) {
+            document.querySelectorAll('.fix-detail').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.trouble-card').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(fixId + '-content').classList.remove('hidden');
+            document.getElementById('btn-' + fixId).classList.add('active');
+        }
+
+        // --- 3. Interactive Charts (Chart.js) ---
+        let volChartInstance = null;
+        let revChartInstance = null;
+
+        function initCharts() {
+            // Processing Volume Chart
+            const ctxVol = document.getElementById('volumeChart').getContext('2d');
+            if (volChartInstance) volChartInstance.destroy();
+            
+            volChartInstance = new Chart(ctxVol, {
+                type: 'bar',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [
+                        {
+                            label: 'The Vacuum Strike',
+                            data: [180, 210, 195, 240, 290, 380, 340],
+                            backgroundColor: '#dc2626',
+                            borderRadius: 12,
+                            barThickness: 15
+                        },
+                        {
+                            label: 'Manual Chopper',
+                            data: [120, 100, 130, 80, 140, 90, 110],
+                            backgroundColor: '#e7e5e4',
+                            borderRadius: 12,
+                            barThickness: 15
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { display: false, beginAtZero: true },
+                        x: { grid: { display: false }, ticks: { font: { family: 'Anuphan', weight: '800', size: 10 } } }
+                    }
+                }
+            });
+
+            // Revenue Distribution Chart
+            const ctxRev = document.getElementById('revenueChart').getContext('2d');
+            if (revChartInstance) revChartInstance.destroy();
+
+            revChartInstance = new Chart(ctxRev, {
+                type: 'doughnut',
+                data: {
+                    labels: ['BB Store 💜', 'Singto Store 🦁'],
+                    datasets: [{
+                        data: [52, 48],
+                        backgroundColor: ['#9333ea', '#f97316'],
+                        borderWidth: 0,
+                        hoverOffset: 30
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '80%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { 
+                            backgroundColor: '#1c1917',
+                            bodyFont: { family: 'Anuphan', weight: 'bold' },
+                            padding: 20,
+                            cornerRadius: 25
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
