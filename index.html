@@ -1,183 +1,51 @@
+<!-- PART 1: ใส่ Script นี้ใน <head> ของหน้าเว็บเพื่อให้อ่านไฟล์ Excel ได้ดื้อๆ -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <script>
-        // --- 🔴 STRATEGIC CONFIGURATION ---
-        const SUPABASE_URL = "https://nlgecesyjcrrqwiitlyt.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_1agyo85-Uxq1VAllYjl1gg_M_utlMbw";
-        const WEBHOOK_URL = "https://draksidemaketing.app.n8n.cloud/webhook/csv-vacuum-strike";
-        
-        let sb = null;
-        let tagChart = null;
+// PART 2: ปรับฟังก์ชัน handleFile ให้รับไฟล์ .xlsx / .csv ตรงเข้า Supabase
+async function handleFile(file) {
+    if (!file) return;
+    statusPanel.classList.remove('hidden');
+    statusText.innerText = "Processing File...";
+    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse";
 
-        // 1. Initialize Supabase Connection
-        if (typeof window.supabase !== 'undefined') {
-            sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            initMonitor();
-        }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rawRows = XLSX.utils.sheet_to_json(firstSheet);
 
-        // 2. Navigation Logic
-        function switchView(viewId) {
-            document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-            
-            document.getElementById('view-' + viewId).classList.remove('hidden');
-            document.getElementById('btn-' + viewId).classList.add('active');
-        }
+            // 🔑 แม็พหัวตารางภาษาไทย ➔ คอลัมน์ Supabase ภาษาอังกฤษ
+            const cleanPayload = rawRows.map(r => ({
+                pickup_date: r["เวลาสร้าง"] || new Date().toISOString(),
+                tracking_number: String(r["เลขพัสดุ"] || "").trim(),
+                consignee: String(r["ชื่อผู้รับ"] || "").trim(),
+                phone: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
+                address: String(r["ที่อยู่ที่รับ"] || "").trim(),
+                cod_amount: parseFloat(r["ยอดCOD"] || 0),
+                page_name: String(r["ชื่อแอคเคาท์"] || "").trim()
+            })).filter(item => item.tracking_number !== "" && item.tracking_number !== "undefined");
 
-        // 3. File Processing & Ingest
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const statusPanel = document.getElementById('status-panel');
-        const statusText = document.getElementById('status-text');
+            // 🚀 PUSH ตรงเข้า Supabase ตาราง parcels ดื้อๆ
+            const { error } = await sb.from('parcels').insert(cleanPayload);
 
-        dropZone.onclick = () => fileInput.click();
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            handleFile(e.dataTransfer.files[0]);
-        });
-        fileInput.onchange = (e) => handleFile(e.target.files[0]);
-
-        async function handleFile(file) {
-            if (!file) return;
-            statusPanel.classList.remove('hidden');
-            statusText.innerText = "Infiltrating & Sanitizing...";
-            statusText.className = "text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse";
-            
-            // Step 1: Pre-Analytics & Auto-Sanitize Thai Headers
-            const reader = new FileReader();
-            reader.onload = (e) => analyzeCSV(e.target.result);
-            reader.readAsText(file);
-
-            // Step 2: Trigger n8n Sniper
-            const formData = new FormData();
-            formData.append('data', file);
-            try {
-                const response = await fetch(WEBHOOK_URL, { method: 'POST', body: formData });
-                if (response.ok) {
-                    statusText.innerText = "SUCCESS! ✌️🔴🔥";
-                    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
-                    setTimeout(() => {
-                        statusPanel.classList.add('hidden');
-                        switchView('dashboard');
-                    }, 2000);
-                }
-            } catch (err) {
-                statusText.innerText = "N8N OFFLINE! 🚨";
-                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
+            if (!error) {
+                statusText.innerText = "SUCCESS! ✌️🔴🔥";
+                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
+                setTimeout(() => {
+                    statusPanel.classList.add('hidden');
+                    switchView('dashboard');
+                }, 1500);
+            } else {
+                throw error;
             }
+        } catch (err) {
+            statusText.innerText = "IMPORT ERROR! 🚨";
+            statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
         }
-
-        // 4. Local Analysis & Thai Header Sanitizer Engine
-        function analyzeCSV(text) {
-            const lines = text.split('\n').filter(l => l.trim() !== '');
-            if (lines.length < 2) return;
-
-            // คลีนและตัดคำใน Header
-            const rawHeaders = lines[0].split(',').map(h => h.replace(/["\r]/g, '').trim());
-            
-            const rows = lines.slice(1).map(line => {
-                const values = line.split(',').map(v => v.replace(/["\r]/g, '').trim());
-                let obj = {};
-                rawHeaders.forEach((h, i) => obj[h] = values[i] || "");
-                return obj;
-            });
-
-            // 🔑 Dictionary แปลงหัวภาษาไทย (รองรับทั้ง Flash และ BB1 Inbox)
-            const cleanRows = rows.map(r => ({
-                created_at: r["เวลาสร้าง"] || r["Created Time"] || new Date().toISOString(),
-                tracking_number: r["เลขพัสดุ"] || r["Tracking"] || "",
-                recipient_name: r["ชื่อผู้รับ"] || r["ชื่อลูกค้า"] || r["Consignee"] || "VVIP Client",
-                phone_number: r["เบอร์ผู้รับ"] || r["เบอร์โทร"] || r["Phone"] || "",
-                address: r["ที่อยู่ที่รับ"] || r["ที่อยู่"] || "",
-                cod_amount: parseFloat(r["ยอดCOD"] || r["COD"] || 0) || 0,
-                page_name: r["ชื่อแอคเคาท์"] || r["เพจ"] || "",
-                unread_count: parseInt(r["จำนวนข้อความที่ยังไม่ได้อ่าน"]) || 0,
-                tag: r["แท็ก"] || ""
-            }));
-
-            // Calculate KPIs แบบ Zero-Error
-            const total = cleanRows.length;
-            const unread = cleanRows.reduce((acc, curr) => acc + curr.unread_count, 0);
-            const ordered = cleanRows.filter(r => r.tag.includes("สั่งซื้อแล้ว") || r.tracking_number !== "").length;
-            const successRate = total > 0 ? ((ordered / total) * 100).toFixed(1) : "0.0";
-
-            document.getElementById('stat-total').innerText = total.toLocaleString();
-            document.getElementById('stat-unread').innerText = unread.toLocaleString();
-            document.getElementById('stat-success').innerText = successRate + "%";
-
-            updateChart(ordered, Math.max(0, total - ordered));
-        }
-
-        // 5. Chart Control
-        function updateChart(ordered, potential) {
-            const ctx = document.getElementById('tagChart').getContext('2d');
-            if (tagChart) tagChart.destroy();
-            tagChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Success (Ordered)', 'Potential'],
-                    datasets: [{
-                        data: [ordered, potential],
-                        backgroundColor: ['#dc2626', '#1c1917'],
-                        borderWidth: 0,
-                        hoverOffset: 25
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '80%',
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        // 6. Real-time Monitoring Logic
-        async function initMonitor() {
-            if (!sb) return;
-
-            // Fetch Count
-            const { count } = await sb.from('tracking_master').select('*', { count: 'exact', head: true });
-            document.getElementById('stat-vault').innerText = count || 0;
-
-            // Fetch Latest Entries
-            const { data } = await sb.from('tracking_master').select('*').order('created_at', { ascending: false }).limit(10);
-            if (data) {
-                const list = document.getElementById('order-list');
-                list.innerHTML = '';
-                data.forEach(order => renderOrderCard(order));
-            }
-
-            // Real-time Subscribe
-            sb.channel('public:tracking_master')
-              .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tracking_master' }, payload => {
-                  renderOrderCard(payload.new, true);
-                  const currentCount = parseInt(document.getElementById('stat-vault').innerText) || 0;
-                  document.getElementById('stat-vault').innerText = currentCount + 1;
-              })
-              .subscribe();
-        }
-
-        function renderOrderCard(order, isNew = false) {
-            const list = document.getElementById('order-list');
-            if (list.innerHTML.includes('AWAITING')) list.innerHTML = '';
-
-            const card = document.createElement('div');
-            card.className = `glass-panel p-6 border-red-900/10 hover:border-red-600 transition-all ${isNew ? 'animate-in slide-in-from-right-4 duration-500' : ''}`;
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-4">
-                    <span class="text-[9px] font-black bg-red-950 text-red-600 px-3 py-1 rounded-full border border-red-900 uppercase">HIT</span>
-                    <span class="text-[9px] text-stone-700 font-mono">${new Date(order.created_at || Date.now()).toLocaleTimeString()}</span>
-                </div>
-                <h4 class="text-lg font-black text-white italic truncate uppercase mb-1">${order.recipient_name || order.consignee || 'VVIP Client'}</h4>
-                <p class="text-xs font-mono text-stone-600 mb-4">${order.phone_number || order.phone || '-'}</p>
-                <div class="flex justify-between items-center border-t border-red-900/10 pt-4">
-                    <span class="text-[8px] font-black text-stone-500 uppercase">COD Value</span>
-                    <span class="text-xl font-black text-white italic">${Number(order.cod_amount || 0).toLocaleString()} ฿</span>
-                </div>
-            `;
-            list.prepend(card);
-            if (list.children.length > 20) list.lastElementChild.remove();
-        }
-    </script>
+    };
+    reader.readAsArrayBuffer(file);
+}
+</script>
