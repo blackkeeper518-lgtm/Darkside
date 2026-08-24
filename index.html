@@ -1,58 +1,102 @@
-<script>
-    // 🔑 ล็อกสายตรงเข้า Supabase ด้วย Credentials โต๊ะสิงโต
-    const SUPABASE_URL = "xbwcuifizktwubsymscs"; // URL Supabase โต๊ะสิงโต
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhid2N1aWZpemt0d3Vic3ltc2NzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTg5ODU2OCwiZXhwIjoyMDk3NDc0NTY4fQ.4yTtZAljqzO4l9g0isduNBWy7DRXrY7vSti5t5hCl1o"; // แปะ Anon / Service Role Key ของโต๊ะสิงโตที่นี่
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Command V9.0 | DARKSIDE SNIPER</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 🔑 ใส่ Script อ่านไฟล์ Excel ล้างอาการหมุนค้าง -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-black text-stone-200 font-sans min-h-screen">
 
-    // Initialize Supabase Client
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false }
-    });
+    <main class="max-w-4xl mx-auto p-12 space-y-8 text-center">
+        <h2 class="text-4xl font-black italic uppercase text-white">THE <span class="text-red-600">CHOPPER</span> DROP</h2>
+        
+        <div id="drop-zone" class="p-20 border-4 border-dashed border-red-900/40 rounded-3xl bg-red-950/10 cursor-pointer hover:border-red-600 transition-all">
+            <span class="text-8xl block mb-4">📂</span>
+            <h3 class="text-2xl font-black uppercase text-white">Drop Excel / CSV Payload</h3>
+            <p class="text-xs text-stone-500 mt-2">รองรับไฟล์ Flash Express (.xlsx / .csv) ยิงเข้า Supabase Direct</p>
+            <input type="file" id="file-input" class="hidden" accept=".csv, .xlsx, .xls">
+        </div>
 
-    // ฟังก์ชัน PUSH ข้อมูลตรงเข้าตาราง parcels ด้วย Token โต๊ะสิงโต
-    async function handleFile(file) {
-        if (!file) return;
-        statusPanel.classList.remove('hidden');
-        statusText.innerText = "Sovereign Infiltrating...";
-        statusText.className = "text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse";
+        <div id="status-panel" class="hidden p-8 bg-stone-900 rounded-2xl border border-red-900/30">
+            <div id="spinner" class="w-12 h-12 border-4 border-red-950 border-t-red-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p id="status-text" class="text-2xl font-black uppercase italic text-amber-500">Infiltrating...</p>
+        </div>
+    </main>
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rawRows = XLSX.utils.sheet_to_json(firstSheet);
+    <script>
+        // 🔑 ใส่ URL และ ANON KEY ของ Supabase โต๊ะสิงโต
+        const SUPABASE_URL = "https://xbwcuifizktwubsymscs.supabase.co"; 
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhid2N1aWZpemt0d3Vic3ltc2NzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTg5ODU2OCwiZXhwIjoyMDk3NDc0NTY4fQ.4yTtZAljqzO4l9g0isduNBWy7DRXrY7vSti5t5hCl1o"; // แปะ Anon Key โต๊ะสิงโตที่นี่
 
-                // 🔑 แปลงหัวไทย ➔ คอลัมน์ภาษาอังกฤษสเปกคลัง parcels
-                const cleanPayload = rawRows.map(r => ({
-                    pickup_date: r["เวลาสร้าง"] || new Date().toISOString(),
-                    tracking_number: String(r["เลขพัสดุ"] || "").trim(),
-                    consignee: String(r["ชื่อผู้รับ"] || "").trim(),
-                    phone: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
-                    phone_number: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
-                    address: String(r["ที่อยู่ที่รับ"] || "").trim(),
-                    cod_amount: String(r["ยอดCOD"] || 0),
-                    cod: String(r["ยอดCOD"] || 0)
-                })).filter(item => item.tracking_number !== "" && item.tracking_number !== "undefined");
+        let sb = null;
+        if (typeof window.supabase !== 'undefined') {
+            sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
 
-                // 🚀 PUSH ตรงเข้า Supabase โต๊ะสิงโต
-                const { error } = await sb.from('parcels').insert(cleanPayload);
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const statusPanel = document.getElementById('status-panel');
+        const statusText = document.getElementById('status-text');
+        const spinner = document.getElementById('spinner');
 
-                if (!error) {
-                    statusText.innerText = "SINGTO VAULT HIT! ✌️🔴🔥";
-                    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
-                    setTimeout(() => {
-                        statusPanel.classList.add('hidden');
-                        switchView('dashboard');
-                    }, 1500);
-                } else {
-                    throw error;
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        async function handleFile(file) {
+            if (!file) return;
+            statusPanel.classList.remove('hidden');
+            spinner.classList.remove('hidden');
+            statusText.innerText = "PROCESSING FILE...";
+            statusText.className = "text-2xl font-black uppercase italic text-amber-500";
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rawRows = XLSX.utils.sheet_to_json(firstSheet);
+
+                    if (!rawRows || rawRows.length === 0) {
+                        throw new Error("EMPTY_FILE");
+                    }
+
+                    // 🔑 สกัดคอลัมน์ภาษาไทย ➔ แปลงเข้าคลัง parcels
+                    const cleanPayload = rawRows.map(r => ({
+                        pickup_date: r["เวลาสร้าง"] || new Date().toISOString(),
+                        tracking_number: String(r["เลขพัสดุ"] || "").trim(),
+                        consignee: String(r["ชื่อผู้รับ"] || "").trim(),
+                        phone: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
+                        phone_number: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
+                        address: String(r["ที่อยู่ที่รับ"] || "").trim(),
+                        cod_amount: String(r["ยอดCOD"] || 0),
+                        cod: String(r["ยอดCOD"] || 0)
+                    })).filter(item => item.tracking_number !== "" && item.tracking_number !== "undefined");
+
+                    // 🚀 PUSH ตรงเข้า Supabase
+                    const { error } = await sb.from('parcels').insert(cleanPayload);
+
+                    if (error) throw error;
+
+                    spinner.classList.add('hidden');
+                    statusText.innerText = "SUCCESS! ✌️🔴🔥";
+                    statusText.className = "text-2xl font-black uppercase italic text-green-500";
+                    setTimeout(() => statusPanel.classList.add('hidden'), 2000);
+
+                } catch (err) {
+                    console.error("IMPORT ERROR:", err);
+                    spinner.classList.add('hidden');
+                    statusText.innerText = "ERROR: " + (err.message || "FAILED!");
+                    statusText.className = "text-2xl font-black uppercase italic text-red-600";
                 }
-            } catch (err) {
-                statusText.innerText = "VAULT PUSH ERROR! 🚨";
-                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-</script>
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
