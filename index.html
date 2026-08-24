@@ -1,51 +1,58 @@
-<!-- PART 1: ใส่ Script นี้ใน <head> ของหน้าเว็บเพื่อให้อ่านไฟล์ Excel ได้ดื้อๆ -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
 <script>
-// PART 2: ปรับฟังก์ชัน handleFile ให้รับไฟล์ .xlsx / .csv ตรงเข้า Supabase
-async function handleFile(file) {
-    if (!file) return;
-    statusPanel.classList.remove('hidden');
-    statusText.innerText = "Processing File...";
-    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse";
+    // 🔑 ล็อกสายตรงเข้า Supabase ด้วย Credentials โต๊ะสิงโต
+    const SUPABASE_URL = "xbwcuifizktwubsymscs"; // URL Supabase โต๊ะสิงโต
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhid2N1aWZpemt0d3Vic3ltc2NzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTg5ODU2OCwiZXhwIjoyMDk3NDc0NTY4fQ.4yTtZAljqzO4l9g0isduNBWy7DRXrY7vSti5t5hCl1o"; // แปะ Anon / Service Role Key ของโต๊ะสิงโตที่นี่
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rawRows = XLSX.utils.sheet_to_json(firstSheet);
+    // Initialize Supabase Client
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { persistSession: false }
+    });
 
-            // 🔑 แม็พหัวตารางภาษาไทย ➔ คอลัมน์ Supabase ภาษาอังกฤษ
-            const cleanPayload = rawRows.map(r => ({
-                pickup_date: r["เวลาสร้าง"] || new Date().toISOString(),
-                tracking_number: String(r["เลขพัสดุ"] || "").trim(),
-                consignee: String(r["ชื่อผู้รับ"] || "").trim(),
-                phone: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
-                address: String(r["ที่อยู่ที่รับ"] || "").trim(),
-                cod_amount: parseFloat(r["ยอดCOD"] || 0),
-                page_name: String(r["ชื่อแอคเคาท์"] || "").trim()
-            })).filter(item => item.tracking_number !== "" && item.tracking_number !== "undefined");
+    // ฟังก์ชัน PUSH ข้อมูลตรงเข้าตาราง parcels ด้วย Token โต๊ะสิงโต
+    async function handleFile(file) {
+        if (!file) return;
+        statusPanel.classList.remove('hidden');
+        statusText.innerText = "Sovereign Infiltrating...";
+        statusText.className = "text-3xl font-black uppercase italic tracking-widest text-amber-500 animate-pulse";
 
-            // 🚀 PUSH ตรงเข้า Supabase ตาราง parcels ดื้อๆ
-            const { error } = await sb.from('parcels').insert(cleanPayload);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rawRows = XLSX.utils.sheet_to_json(firstSheet);
 
-            if (!error) {
-                statusText.innerText = "SUCCESS! ✌️🔴🔥";
-                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
-                setTimeout(() => {
-                    statusPanel.classList.add('hidden');
-                    switchView('dashboard');
-                }, 1500);
-            } else {
-                throw error;
+                // 🔑 แปลงหัวไทย ➔ คอลัมน์ภาษาอังกฤษสเปกคลัง parcels
+                const cleanPayload = rawRows.map(r => ({
+                    pickup_date: r["เวลาสร้าง"] || new Date().toISOString(),
+                    tracking_number: String(r["เลขพัสดุ"] || "").trim(),
+                    consignee: String(r["ชื่อผู้รับ"] || "").trim(),
+                    phone: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
+                    phone_number: String(r["เบอร์ผู้รับ"] || "").replace(/[^0-9]/g, ""),
+                    address: String(r["ที่อยู่ที่รับ"] || "").trim(),
+                    cod_amount: String(r["ยอดCOD"] || 0),
+                    cod: String(r["ยอดCOD"] || 0)
+                })).filter(item => item.tracking_number !== "" && item.tracking_number !== "undefined");
+
+                // 🚀 PUSH ตรงเข้า Supabase โต๊ะสิงโต
+                const { error } = await sb.from('parcels').insert(cleanPayload);
+
+                if (!error) {
+                    statusText.innerText = "SINGTO VAULT HIT! ✌️🔴🔥";
+                    statusText.className = "text-3xl font-black uppercase italic tracking-widest text-green-500";
+                    setTimeout(() => {
+                        statusPanel.classList.add('hidden');
+                        switchView('dashboard');
+                    }, 1500);
+                } else {
+                    throw error;
+                }
+            } catch (err) {
+                statusText.innerText = "VAULT PUSH ERROR! 🚨";
+                statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
             }
-        } catch (err) {
-            statusText.innerText = "IMPORT ERROR! 🚨";
-            statusText.className = "text-3xl font-black uppercase italic tracking-widest text-red-600";
-        }
-    };
-    reader.readAsArrayBuffer(file);
-}
+        };
+        reader.readAsArrayBuffer(file);
+    }
 </script>
